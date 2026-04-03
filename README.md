@@ -1,4 +1,6 @@
 # Lockboxes
 **Lockbox Local (Python Reimplementation)**
 
-This is a python 3 reimplementation of a Java-based tool that replicates the functionality of Pluckeye Lockbox. The original java version can be found here:  [Clickable Text]https://github.com/japierreSWE/Lockbox_Local
+A python 3 reimplementation that replicates the functionality of Pluckeye Lockbox which can be found here: https://lockbox.pluckeye.net/help
+.
+This project was inspited by this java version:  [Clickable Text]https://github.com/japierreSWE/Lockbox_Local
