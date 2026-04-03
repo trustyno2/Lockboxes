@@ -236,8 +236,6 @@ class CryptoManager:
       - 'protecting' (obfuscating) the key so it's not stored in plain form
     """
 
-    # Hardcoded secret pepper – makes reverse engineering more annoying
-    #_PEPPER = b"plk_time_lock_secret_2025"
 
     def __init__(self):
         self._PEPPER = PepperObfuscator.get_pepper()
