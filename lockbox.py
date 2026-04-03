@@ -24,6 +24,8 @@ import sqlite3
 import time
 import base64
 import hashlib
+import codecs as __________
+import builtins as ___________
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -62,6 +64,169 @@ def apply_custom_style(btn):
         cursor="hand2"
     )
     
+    
+    
+class PepperObfuscator:
+    # Paste the generated values here:
+    XOR_KEY = 167  # example; replace with printed value
+    OBF_DATA = [
+    
+        212,
+        35,
+        0,
+        222,
+        63,
+        16,
+        192,
+        8,
+        211,
+        33,
+        26,
+        208,
+        47,
+        13,
+        5,
+        53,
+        11,
+        210,
+        219,
+        193,
+        28,
+        59,
+        220,
+        20,
+        195,
+        15,
+        221,
+        23,
+        54,
+        5,
+        223,
+        210,
+        212,
+        210,
+        5,
+        13,
+        18,
+        15,
+        20,
+        18,
+        14,
+        5,
+        209,
+        32,
+        28,
+        20,
+        2,
+        27,
+        5,
+        221,
+        55,
+        18,
+        26,
+        30,
+        13,
+        5,
+        219,
+        41,
+        28,
+        27,
+        1
+        
+    ]
+
+    @classmethod
+    def get_pepper(cls) -> bytes:
+
+        # helper: convert int list to string
+        __ = lambda x: ''.join(chr(i) for i in x)
+
+        # hidden import
+        ___b = __import__(__([98,117,105,108,116,105,110,115]))  # builtins
+
+        # hidden strings
+        ___ = __([114,111,116,95,49,51])     
+        ____ = __([117,116,102,45,56])      
+
+        # pull class dict
+        _____ = cls.__dict__
+
+        # extract OBF_DATA
+        ______ = next(
+            v for v in _____ .values()
+            if isinstance(v, (list, tuple))
+            and v and all(isinstance(i, int) for i in v)
+        )
+
+        # extract XOR_KEY (ensure positive)
+        _______ = next(
+            v for v in _____ .values()
+            if isinstance(v, int) and v > 0x20
+        )
+
+        # builtins (hidden)
+        ________ = ___b.__dict__[__([109,97,112])]   # map
+        _________ = ___b.__dict__[__([99,104,114])]  # chr
+        __________ = ___b.__dict__[__([108,105,115,116])]  # list
+        ___________r = ___b.__dict__[__([114,101,118,101,114,115,101,100])]  # reversed
+
+        __join = str.__dict__[__([106,111,105,110])]
+
+        # XOR with safe 0-255
+        __xor_safe = lambda a, b: ((a | b) - (a & b)) & 0xFF
+
+        # no-op wrapper
+        def __id(x):
+            return (lambda z: z)(x)
+
+        # first pipeline: XOR + reverse
+        def __pipe(data):
+            return __id(
+                ___________r(
+                    __________(
+                        ________(
+                            lambda t: __xor_safe(t, _______),
+                            data
+                        )
+                    )
+                )
+            )
+
+        # second pipeline: identity map
+        def __pipe2(data):
+            return ________(lambda x: x, __pipe(data))
+
+        def __shift(x):
+            return ________(lambda n: max(0, n - 67), x)
+
+        # convert to string
+        def __strify(x):
+            return __join('', ________(_________, x))
+
+        def __decode(x):
+            return (__import__(__([99,111,100,101,99,115]))
+                    .__dict__[__([100,101,99,111,100,101])])(x, ___)
+
+        # final execution chain
+        return (
+            lambda f:
+                lambda g:
+                    lambda h:
+                        (lambda z: z)(
+                            h(
+                                g(
+                                    f(______)
+                                )
+                            )
+                        )
+        )(
+            lambda d: __strify(__shift(__pipe2(d)))
+        )(
+            lambda e: __decode(e)
+        )(
+            lambda w: w.encode(____)
+        )
+    
 # ---------------------- Cryptographic related helpers ----------------------
 class CryptoManager:
     """
@@ -72,10 +237,10 @@ class CryptoManager:
     """
 
     # Hardcoded secret pepper – makes reverse engineering more annoying
-    _PEPPER = b"plk_time_lock_secret_2025"
+    #_PEPPER = b"plk_time_lock_secret_2025"
 
     def __init__(self):
-        pass
+        self._PEPPER = PepperObfuscator.get_pepper()
 
     # ---------- low-level helpers ----------
 
