@@ -138,48 +138,48 @@ class PepperObfuscator:
     @classmethod
     def get_pepper(cls) -> bytes:
 
-        # helper: convert int list to string
+
         __ = lambda x: ''.join(chr(i) for i in x)
 
-        # hidden import
-        ___b = __import__(__([98,117,105,108,116,105,110,115]))  # builtins
 
-        # hidden strings
+        ___b = __import__(__([98,117,105,108,116,105,110,115]))
+
+
         ___ = __([114,111,116,95,49,51])     
         ____ = __([117,116,102,45,56])      
 
-        # pull class dict
+
         _____ = cls.__dict__
 
-        # extract OBF_DATA
+
         ______ = next(
             v for v in _____ .values()
             if isinstance(v, (list, tuple))
             and v and all(isinstance(i, int) for i in v)
         )
 
-        # extract XOR_KEY (ensure positive)
+
         _______ = next(
             v for v in _____ .values()
             if isinstance(v, int) and v > 0x20
         )
 
-        # builtins (hidden)
-        ________ = ___b.__dict__[__([109,97,112])]   # map
-        _________ = ___b.__dict__[__([99,104,114])]  # chr
-        __________ = ___b.__dict__[__([108,105,115,116])]  # list
-        ___________r = ___b.__dict__[__([114,101,118,101,114,115,101,100])]  # reversed
+
+        ________ = ___b.__dict__[__([109,97,112])]  
+        _________ = ___b.__dict__[__([99,104,114])]  
+        __________ = ___b.__dict__[__([108,105,115,116])]  
+        ___________r = ___b.__dict__[__([114,101,118,101,114,115,101,100])]  
 
         __join = str.__dict__[__([106,111,105,110])]
 
-        # XOR with safe 0-255
+
         __xor_safe = lambda a, b: ((a | b) - (a & b)) & 0xFF
 
-        # no-op wrapper
+
         def __id(x):
             return (lambda z: z)(x)
 
-        # first pipeline: XOR + reverse
+
         def __pipe(data):
             return __id(
                 ___________r(
@@ -192,14 +192,14 @@ class PepperObfuscator:
                 )
             )
 
-        # second pipeline: identity map
+
         def __pipe2(data):
             return ________(lambda x: x, __pipe(data))
 
         def __shift(x):
             return ________(lambda n: max(0, n - 67), x)
 
-        # convert to string
+
         def __strify(x):
             return __join('', ________(_________, x))
 
@@ -207,7 +207,7 @@ class PepperObfuscator:
             return (__import__(__([99,111,100,101,99,115]))
                     .__dict__[__([100,101,99,111,100,101])])(x, ___)
 
-        # final execution chain
+
         return (
             lambda f:
                 lambda g:
