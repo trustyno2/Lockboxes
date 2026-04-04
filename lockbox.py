@@ -906,8 +906,8 @@ class CreateBoxView(tk.Frame):
         self.confirm_btn.pack()
 
         # underscore validation
-        self.name_entry.bind("<KeyRelease>", self.validate_underscore)
-        self.contents_text.bind("<KeyRelease>", self.validate_underscore)
+        self.name_entry.bind("<KeyRelease>", self.validate_name)
+        #self.contents_text.bind("<KeyRelease>", self.validate_underscore)
 
         self.master.protocol("WM_DELETE_WINDOW", self._on_close)
         
@@ -917,21 +917,13 @@ class CreateBoxView(tk.Frame):
             self.on_close()
         self.master.destroy()
 
-    def validate_underscore(self, event=None):
+    def validate_name(self, event=None):
         name = self.name_var.get()
-        
-        # 'end-1c' means "end minus 1 character", which removes the auto-added newline
-        contents = self.contents_text.get("1.0", "end-1c")
-        
+
         if "_" in name:
             self.name_error.config(text="Names cannot contain underscores.")
             self.name_error.pack(anchor="w")
-        elif "_" in contents:
-            self.name_error.config(text="Contents cannot contain underscores.")
-            self.name_error.pack(anchor="w")
-        else:
-            self.name_error.pack_forget()
-            self.name_error.config(text="")
+
 
 
     def to_ms(self, units, unit_type):
@@ -952,7 +944,9 @@ class CreateBoxView(tk.Frame):
         name = self.name_var.get().strip()
         contents = self.contents_text.get("1.0", "end-1c").strip()
 
-        if "_" in name or "_" in contents:
+        if "_" in name:
+            self.relock_error.config(text="Names cannot contain underscores.")
+            self.relock_error.pack(anchor="w")
             return
 
         # 1. Block empty names
