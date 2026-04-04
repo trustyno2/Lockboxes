@@ -24,6 +24,7 @@ import sqlite3
 import time
 import base64
 import hashlib
+import json
 import codecs as __________
 import builtins as ___________
 from cryptography.fernet import Fernet
@@ -311,6 +312,39 @@ class CryptoManager:
         return hmac.new(self._PEPPER, msg, hashlib.sha256).hexdigest()
 
 
+def get_time_snapshot():
+    import time
+    return {
+        "wall": int(time.time()),
+        "mono": int(time.monotonic())
+    }
+
+def detect_time_tamper(prev_json):
+    import time, json
+
+    if not prev_json:
+        return False
+
+    prev = json.loads(prev_json)
+
+    now_wall = int(time.time())
+    now_mono = int(time.monotonic())
+
+    wall_diff = now_wall - prev["wall"]
+    mono_diff = now_mono - prev["mono"]
+    
+    if mono_diff < 0:
+        return False
+
+    if wall_diff < 0:
+        return True
+
+    if abs(wall_diff - mono_diff) > 5:
+        return True
+
+    return False
+
+
 # ---------------------- Entity ----------------------
 class Lockbox:
     def __init__(
@@ -324,6 +358,7 @@ class Lockbox:
         relock_timestamp=0,
         key_obf=None,
         integrity=None,
+        time_snap=None,
     ):
         self.name = name
         self.contents = contents
@@ -334,6 +369,7 @@ class Lockbox:
         self.relock_timestamp = relock_timestamp
         self.key_obf = key_obf
         self.integrity = integrity
+        self.time_snap = time_snap
 
 
 
@@ -365,7 +401,8 @@ class Model:
                 unlock_timestamp INTEGER,
                 relock_timestamp INTEGER NOT NULL,
                 key_obf TEXT,
-                integrity TEXT
+                integrity TEXT,
+                time_snap TEXT
             )
             """
         )
@@ -399,16 +436,17 @@ class Model:
             relock_timestamp=0,
             key_obf=key_obf,
             integrity=None,
+            time_snap=None
         )
-
+        box.time_snap = json.dumps(get_time_snapshot())
         box.integrity = self.crypto.compute_integrity(box)
 
         self.conn.execute(
             """
             INSERT INTO boxes
             (name, contents, unlock_delay, relock_delay,
-             locked, unlock_timestamp, relock_timestamp, key_obf, integrity)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             locked, unlock_timestamp, relock_timestamp, key_obf, integrity, time_snap)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 box.name,
@@ -420,6 +458,7 @@ class Model:
                 box.relock_timestamp,
                 box.key_obf,
                 box.integrity,
+                box.time_snap
             ),
         )
         self.conn.commit()
@@ -435,7 +474,7 @@ class Model:
             """
             SELECT name, contents, unlock_delay, relock_delay,
                    locked, unlock_timestamp, relock_timestamp,
-                   key_obf, integrity
+                   key_obf, integrity, time_snap
             FROM boxes
             WHERE name = ?
             """,
@@ -457,6 +496,7 @@ class Model:
             relock_timestamp=row["relock_timestamp"],
             key_obf=row["key_obf"],
             integrity=row["integrity"],
+            time_snap=row["time_snap"],
         )
 
         # 🔥 TAMPER CHECK GOES HERE
@@ -464,6 +504,10 @@ class Model:
 
         if box.integrity != expected:
             return "TAMPERED"
+
+        if box.unlock_timestamp is not None:
+            if detect_time_tamper(box.time_snap):
+                return "TIME_TAMPERED"
 
 
         return box
@@ -474,6 +518,8 @@ class Model:
 
         # 1. Recompute integrity BEFORE saving
         box.integrity = self.crypto.compute_integrity(box)
+        
+        box.time_snap = json.dumps(get_time_snapshot())
 
         # 2. Update the row including integrity
         self.conn.execute(
@@ -481,7 +527,7 @@ class Model:
             UPDATE boxes
             SET contents = ?, unlock_delay = ?, relock_delay = ?,
                 locked = ?, unlock_timestamp = ?, relock_timestamp = ?,
-                key_obf = ?, integrity = ?
+                key_obf = ?, integrity = ?, time_snap = ?
             WHERE name = ?
             """,
             (
@@ -493,6 +539,7 @@ class Model:
                 box.relock_timestamp,
                 box.key_obf,
                 box.integrity,   # ← correct
+                box.time_snap,
                 box.name,
             ),
         )
@@ -519,7 +566,7 @@ class Model:
                 """
                 SELECT name, contents, unlock_delay, relock_delay,
                        locked, unlock_timestamp, relock_timestamp,
-                       key_obf, integrity
+                       key_obf, integrity, time_snap
                 FROM boxes
                 """
             )
@@ -537,8 +584,8 @@ class Model:
                     INSERT INTO boxes
                     (name, contents, unlock_delay, relock_delay,
                      locked, unlock_timestamp, relock_timestamp,
-                     key_obf, integrity)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     key_obf, integrity, time_snap)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         row["name"],
@@ -550,6 +597,7 @@ class Model:
                         row["relock_timestamp"],
                         row["key_obf"],
                         row["integrity"],
+                        row["time_snap"],
                     ),
                 )
                 imported += 1
@@ -601,6 +649,19 @@ class HomeView(tk.Frame):
 
         self.box_list = tk.Listbox(self, borderwidth=0, height=6, activestyle="none")
         self.box_list.pack(fill="x", expand=False, pady=(5, 0), padx=2)
+        
+        
+        self.warning_label = tk.Label(
+            self,
+            text="⚠ WARNING: Modifying the system clock or database will permanently disable your lockboxes.",
+            fg="red",
+            font=("Courier New", 12),
+            wraplength=320,
+            justify="center"
+        )
+        self.warning_label.pack(pady=(25, 0))
+        
+        
         
         # ADD THIS LINE:
         self.box_list.bind("<<ListboxSelect>>", self.on_listbox_select)
@@ -1039,6 +1100,10 @@ class DisplayBoxView(tk.Frame):
         if self.currentBox == "TAMPERED":
             self.show_tamper_screen()
             return
+            
+        if self.currentBox == "TIME_TAMPERED":
+            self.show_time_tamper_screen()
+            return
         
         if not self.currentBox:
             messagebox.showerror("Error", "This lockbox no longer exists.", parent=self.master)
@@ -1078,6 +1143,21 @@ class DisplayBoxView(tk.Frame):
         self.lastStatus = None
         self.updateUI()
         self._tick()
+
+
+    def show_time_tamper_screen(self):
+        for widget in self.winfo_children():
+            widget.destroy()
+
+        warning = tk.Label(
+            self,
+            text="⚠️ Time tampering detected.\nLockbox disabled.",
+            fg="red",
+            font=("Segoe UI", 12, "bold"),
+            justify="center"
+        )
+        warning.pack(pady=20)  
+        
         
     def show_tamper_screen(self):
         # Clear the window
@@ -1136,16 +1216,13 @@ class DisplayBoxView(tk.Frame):
             remaining = duration_ms
             
             # Calculate units
-            d = remaining // day_len
-            remaining %= day_len
-            
-            h = remaining // hour_len
-            remaining %= hour_len
-            
-            m = remaining // min_len
-            remaining %= min_len
-            
-            s = max(0, (remaining - 1) // sec_len)
+            remaining = max(0, duration_ms - 1)
+            total_seconds = remaining // 1000
+
+            d = total_seconds // 86400
+            h = (total_seconds % 86400) // 3600
+            m = (total_seconds % 3600) // 60
+            s = total_seconds % 60
 
 
             # Build the string parts
@@ -1153,13 +1230,29 @@ class DisplayBoxView(tk.Frame):
             if d > 0: parts.append(f"{d}d")
             if h > 0: parts.append(f"{h}h")
             if m > 0: parts.append(f"{m}m")
-            if s > 0 or not parts: # Show seconds if it's the only thing left
-                parts.append(f"{s}s")
+            parts.append(f"{s}s")
 
             # Join with a space for a tight look: "1d 4h 20m"
             return " ".join(parts)
 
     def updateUI(self):
+    
+            box = self.model.getBox(self.box_name)
+
+            if box == "TAMPERED":
+                self.show_tamper_screen()
+                return
+
+            if box == "TIME_TAMPERED":
+                self.show_time_tamper_screen()
+                return
+
+            if not box:
+                self.master.destroy()
+                return
+
+            self.currentBox = box
+            
             # Fix 1: Check if the window still exists before doing anything
             if not self.winfo_exists():
                 return
@@ -1299,6 +1392,8 @@ class DisplayBoxView(tk.Frame):
         
         # Change the condition to keep ticking as long as ANY timestamp is active
         if self.currentBox and (self.currentBox.unlock_timestamp is not None):
+            if hasattr(self, "_after_id"):
+                self.after_cancel(self._after_id)
             self._after_id = self.after(1000, self._tick)
         else:
             # If the box just finished relocking, refresh the UI one last time
@@ -1386,7 +1481,7 @@ def main():
                 pass
         root.destroy()
 
-    root.geometry("370x300")
+    root.geometry("370x410")
     root.resizable(False, False)
     root.protocol("WM_DELETE_WINDOW", on_close)
 
