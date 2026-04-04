@@ -42,8 +42,8 @@ from tkinter import (
 
 
 
-DB_FILE = "lockbox_local.db"
-LOCK_FILE = "lockbox.lock"
+DB_FILE = ".lockbox_local.db"
+LOCK_FILE = ".lockbox.lock"
 
 
 def apply_custom_style(btn):
