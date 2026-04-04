@@ -837,10 +837,6 @@ class CreateBoxView(tk.Frame):
         self.name_label = tk.Label(self, text="Name:")
         self.name_label.pack(anchor="w")
 
-        self.name_error = tk.Label(self, text="", fg="red", font=("TkDefaultFont", 8))
-        self.name_error.pack(anchor="w")
-        self.name_error.pack_forget()
-
         self.name_var = tk.StringVar()
         self.name_entry = tk.Entry(self, textvariable=self.name_var, width=40, bg="white")
         self.name_entry.pack(anchor="w")
@@ -851,7 +847,7 @@ class CreateBoxView(tk.Frame):
         self.contents_text = tk.Text(self, height=3.7, width=40, bg="white")
         self.contents_text.pack(anchor="w")
 
-# Unlock delay
+        # Unlock delay
         self.unlock_frame = tk.Frame(self)
         self.unlock_frame.pack(anchor="w", pady=(15, 5)) 
         
@@ -921,8 +917,10 @@ class CreateBoxView(tk.Frame):
         name = self.name_var.get()
 
         if "_" in name:
-            self.name_error.config(text="Names cannot contain underscores.")
-            self.name_error.pack(anchor="w")
+            self.relock_error.config(text="Names cannot contain underscores.")
+            self.relock_error.pack(anchor="w")
+        else:
+            self.relock_error.pack_forget()
 
 
 
