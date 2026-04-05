@@ -17,6 +17,7 @@
 
 #sudo apt install python3-cryptography
 #sudo apt install python3-tk
+#sudo apt install python3-portalocker
 
 import os
 import shutil
@@ -24,6 +25,7 @@ import sqlite3
 import time
 import base64
 import hashlib
+import portalocker
 import json
 import codecs as __________
 import builtins as ___________
@@ -1114,16 +1116,23 @@ class DisplayBoxView(tk.Frame):
         self.lastStatus = None
         self.currentlyUnlocking = self.currentBox.unlock_timestamp is not None
 
+        self.lastStatus = None
+
+        self._build_ui()   # 🔥 THIS WAS MISSING
+        self.updateUI()
+        self._tick()
+  
+
+
+    def _build_ui(self):
         self.title_label = tk.Label(self, text=self.box_name, font=("Courier", 14))
         self.title_label.pack(anchor="w")
 
         self.lock_status = tk.Label(self, text="Locked")
-        self.lock_status.pack(anchor="w", pady=(0, 10)) # Reduced pady slightly
+        self.lock_status.pack(anchor="w", pady=(0, 10))
 
-        # 1. Define the Time Label here (but don't pack it yet)
         self.time_label = tk.Label(self, text="", fg="black", font=("Tahoma", 10))
 
-        # 2. Define and pack the Button Frame
         self.btn_frame = tk.Frame(self)
         self.btn_frame.pack(anchor="w", pady=(0, 20))
         
@@ -1140,9 +1149,55 @@ class DisplayBoxView(tk.Frame):
 
         self.contents_text = tk.Text(self, height=10, width=40, bg='white')
         self.contents_text.pack(fill="both", expand=True)
+        
+
+    def on_restart_timer(self):
+        if hasattr(self, "_after_id"):
+            self.after_cancel(self._after_id)
+
+        box = self.model.getBox(self.box_name)
+
+        if box == "TIME_TAMPERED":
+            cur = self.model.conn.execute(
+                "SELECT * FROM boxes WHERE name = ?", (self.box_name,)
+            )
+            row = cur.fetchone()
+            if not row:
+                return
+
+            box = Lockbox(
+                name=row["name"],
+                contents=row["contents"],
+                unlock_delay=row["unlock_delay"],
+                relock_delay=row["relock_delay"],
+                locked=1,
+                unlock_timestamp=None,
+                relock_timestamp=0,
+                key_obf=row["key_obf"],
+                integrity=row["integrity"],
+                time_snap=row["time_snap"],
+            )
+
+        now_ms = int(time.time() * 1000)
+
+        box.locked = 1
+        box.unlock_timestamp = now_ms + box.unlock_delay
+        box.relock_timestamp = box.unlock_timestamp + box.relock_delay
+
+        self.model.updateBox(box)
+
+        # 🔥 CLEAN RESET (no __init__)
+        for widget in self.winfo_children():
+            widget.destroy()
+
+        self.currentBox = self.model.getBox(self.box_name)
         self.lastStatus = None
+        self.currentlyUnlocking = True
+
+        self._build_ui()
         self.updateUI()
         self._tick()
+
 
 
     def show_time_tamper_screen(self):
@@ -1151,39 +1206,21 @@ class DisplayBoxView(tk.Frame):
 
         warning = tk.Label(
             self,
-            text="⚠️ Time tampering detected.\nLockbox disabled.",
-            fg="red",
-            font=("Segoe UI", 12, "bold"),
-            justify="center"
-        )
-        warning.pack(pady=20)  
-        
-        
-    def show_tamper_screen(self):
-        # Clear the window
-        for widget in self.winfo_children():
-            widget.destroy()
-
-        # Big red warning
-        warning = tk.Label(
-            self,
-            text="⚠️  This lockbox has been tampered.\nIt cannot be opened.",
+            text="⚠️ Time tampering detected.\nTimer has been invalidated.",
             fg="red",
             font=("Segoe UI", 12, "bold"),
             justify="center"
         )
         warning.pack(pady=20)
 
-        # Optional: Delete button
-        delete_btn = tk.Button(
+        restart_btn = tk.Button(
             self,
-            text="Delete Lockbox",
-            command=self.on_delete_tampered
+            text="Restart Timer",
+            command=self.on_restart_timer
         )
-        apply_custom_style(delete_btn)
-        delete_btn.pack(pady=10)
+        apply_custom_style(restart_btn)
+        restart_btn.pack(pady=10)
 
-        # Optional: Close button
         close_btn = tk.Button(
             self,
             text="Close",
@@ -1405,29 +1442,31 @@ def main():
     # 1. ATTEMPT TO CLAIM THE LOCK
     # We try to open the file for writing.
     # If instance #1 is already running, instance #2 will fail to delete or overwrite it.
-    lock_file_handle = None
     
-    if os.path.exists(LOCK_FILE):
-        try:
-            # Try to remove it. If the other app is running, this triggers an OSError.
-            os.remove(LOCK_FILE)
-        except OSError:
-            # THIS IS THE BLOCK: Another instance is currently holding this file open.
-            root = tk.Tk()
-            root.withdraw() 
-            messagebox.showerror("App Already Running", 
-                                 "Another instance of Pluckeye Lockbox is already open.")
-            root.destroy()
-            return
+
+    lock_file_handle = None
 
     try:
-        # Create the file and KEEP IT OPEN. 
-        # By not using 'with', the file stays 'in use' by this script.
         lock_file_handle = open(LOCK_FILE, "w")
+
+        portalocker.lock(
+            lock_file_handle,
+            portalocker.LOCK_EX | portalocker.LOCK_NB
+        )
+
+        # Write PID AFTER locking
         lock_file_handle.write(str(os.getpid()))
-        lock_file_handle.flush() # Ensure it's written to disk
-    except Exception as e:
-        print(f"Could not create lock: {e}")
+        lock_file_handle.flush()
+
+    except portalocker.exceptions.LockException:
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror(
+            "App Already Running",
+            "Another instance of Pluckeye Lockbox is already open."
+        )
+        root.destroy()
+        return
 
     # 2. START THE UI
     root = tk.Tk()
@@ -1469,16 +1508,20 @@ def main():
 
     def on_close():
         model.close()
-        # Close the file handle so the OS releases the lock
+
         if lock_file_handle:
-            lock_file_handle.close()
-        
-        # Now we can safely remove the file
+            try:
+                portalocker.unlock(lock_file_handle)
+                lock_file_handle.close()
+            except:
+                pass
+
         if os.path.exists(LOCK_FILE):
             try:
                 os.remove(LOCK_FILE)
             except:
                 pass
+
         root.destroy()
 
     root.geometry("370x410")
